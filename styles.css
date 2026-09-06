@@ -82,6 +82,7 @@ html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  overscroll-behavior-x: none;
   background: var(--dv-color-bg);
   color: var(--dv-color-text);
   font-family: var(--dv-font-family);
@@ -89,7 +90,7 @@ html, body {
   line-height: 1.4;
   -webkit-user-select: none;
   user-select: none;
-  touch-action: manipulation;
+  touch-action: pan-y;
 }
 
 input, textarea { -webkit-user-select: text; user-select: text; }
@@ -453,6 +454,7 @@ svg { display: block; }
   display: flex;
   gap: var(--dv-space-sm);
   overflow-x: auto;
+  touch-action: pan-x;
   padding-bottom: var(--dv-space-sm);
 }
 .dv-recent-card {
@@ -516,6 +518,7 @@ svg { display: block; }
   border-bottom: 1px solid var(--dv-color-border);
   flex: 0 0 auto;
   overflow-x: auto;
+  touch-action: pan-x;
   -webkit-overflow-scrolling: touch;
 }
 .dv-editor__tab {
@@ -625,14 +628,14 @@ svg { display: block; }
 .dv-qc-item--pass svg { color: var(--dv-color-success); }
 .dv-qc-item--warn svg { color: var(--dv-color-error); }
 
-.dv-editor__footer {
-  flex: 0 0 auto;
+.dv-editor__actions {
   display: flex;
   gap: var(--dv-space-sm);
-  padding: var(--dv-space-md);
+  margin-top: var(--dv-space-lg);
+  padding-top: var(--dv-space-md);
   border-top: 1px solid var(--dv-color-border);
 }
-.dv-editor__footer > * { flex: 1; }
+.dv-editor__actions > * { flex: 1; }
 
 /* ==========================================================================
    Files page
@@ -692,34 +695,103 @@ svg { display: block; }
 .dv-more-grid { display: flex; flex-direction: column; }
 
 /* ==========================================================================
-   Toasts (custom, replacing browser alerts)
+/* ==========================================================================
+   Notepad
+   ========================================================================== */
+
+.dv-fab {
+  position: absolute;
+  right: var(--dv-space-lg);
+  bottom: calc(var(--dv-space-lg) + env(safe-area-inset-bottom));
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--dv-color-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  z-index: 5;
+}
+.dv-fab:active { background: var(--dv-color-primary-hover); transform: scale(0.96); }
+.dv-fab svg { width: 28px; height: 28px; }
+
+.dv-notepad-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  overflow-x: auto;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid var(--dv-color-border);
+  background: var(--dv-color-surface);
+}
+.dv-notepad-tool {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 64px;
+  min-height: var(--dv-touch-min);
+  padding: var(--dv-space-xs) var(--dv-space-sm);
+}
+.dv-notepad-tool svg { width: 22px; height: 22px; }
+.dv-notepad-tool span { font-size: calc(var(--dv-font-min) * 0.7 * var(--dv-scale)); font-weight: 600; }
+.dv-notepad-tool:active { background: var(--dv-color-primary-light); }
+.dv-notepad-tool--disabled { opacity: 0.35; pointer-events: none; }
+.dv-notepad-tool--active { color: var(--dv-color-primary); }
+
+.dv-notepad-body { flex: 1; min-height: 0; display: flex; }
+.dv-notepad-textarea {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: var(--dv-space-md);
+  font-family: var(--dv-font-family);
+  font-size: calc(var(--dv-notepad-scale, 1) * 19px);
+  line-height: 1.5;
+  background: var(--dv-color-bg);
+  color: var(--dv-color-text);
+}
+
+/* ==========================================================================
+   Toasts — centered on screen (native Android-style, center gravity)
    ========================================================================== */
 
 .dv-toast-stack {
   position: fixed;
-  left: var(--dv-space-md);
-  right: var(--dv-space-md);
-  bottom: calc(var(--dv-bottomnav-height) + env(safe-area-inset-bottom) + var(--dv-space-md));
-  z-index: 80;
+  left: var(--dv-space-lg);
+  right: var(--dv-space-lg);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 90;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--dv-space-sm);
   pointer-events: none;
 }
 .dv-toast {
-  background: #323232;
+  background: rgba(50,50,50,0.92);
   color: #fff;
-  border-radius: 8px;
-  padding: var(--dv-space-md);
+  border-radius: 24px;
+  padding: var(--dv-space-md) var(--dv-space-lg);
   font-size: calc(var(--dv-font-min) * var(--dv-scale));
+  text-align: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   opacity: 0;
-  transform: translateY(12px);
+  transform: scale(0.9);
   transition: opacity 0.2s ease, transform 0.2s ease;
+  max-width: 100%;
 }
-.dv-toast--visible { opacity: 1; transform: translateY(0); }
-.dv-toast--success { background: var(--dv-color-success); }
-.dv-toast--error { background: var(--dv-color-error); }
+.dv-toast--visible { opacity: 1; transform: scale(1); }
+.dv-toast--success { background: rgba(66,183,42,0.95); }
+.dv-toast--error { background: rgba(250,56,62,0.95); }
 
 /* ==========================================================================
    Utility
