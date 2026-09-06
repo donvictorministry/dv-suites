@@ -1,10 +1,9 @@
 /* ==========================================================================
    DV-SUITE — scripts.js
-   Vanilla ES6+, zero external dependencies, zero frameworks.
-   All identifiers prefixed dv / DV.
    ========================================================================== */
-
 'use strict';
+
+const DV_WATERMARK_TEXT = 'DON VICTOR MINISTRIES';
 
 /* ==========================================================================
    0. Small utilities
@@ -47,9 +46,36 @@ const DvToast = {
   }
 };
 
-/* ==========================================================================
-   2. IndexedDB wrapper — DV-SUITE storage
-   ========================================================================== */
+const DvColor = {
+  dvProbeEl: null,
+
+  dvGetProbe() {
+    if (!this.dvProbeEl) this.dvProbeEl = new Option();
+    return this.dvProbeEl;
+  },
+
+  dvIsValid(dvValue) {
+    if (!dvValue) return false;
+    const dvProbe = this.dvGetProbe();
+    dvProbe.style.color = '';
+    dvProbe.style.color = dvValue;
+    return dvProbe.style.color !== '';
+  },
+
+  // Resolve any valid CSS colour (hex or name) to a normalized #rrggbb hex,
+  // since the canvas engine's contrast maths expects hex.
+  dvToHex(dvValue) {
+    if (!this.dvIsValid(dvValue)) return null;
+    const dvCanvas = document.createElement('canvas');
+    dvCanvas.width = 1; dvCanvas.height = 1;
+    const dvCtx = dvCanvas.getContext('2d');
+    dvCtx.fillStyle = '#000000';
+    dvCtx.fillStyle = dvValue;
+    dvCtx.fillRect(0, 0, 1, 1);
+    const dvPixel = dvCtx.getImageData(0, 0, 1, 1).data;
+    return '#' + [dvPixel[0], dvPixel[1], dvPixel[2]].map((dvV) => dvV.toString(16).padStart(2, '0')).join('');
+  }
+};
 
 const DvDB = {
   dvName: 'dv-suite-db',
@@ -369,8 +395,6 @@ const DvDesign = {
       secondaryColor: '#FFFFFF',
       headlineColor: '#1877F2',
       bodyColor: '#333333',
-      watermarkEnabled: true,
-      watermarkText: 'DV-SUITE',
       font: "Roboto, system-ui, sans-serif",
       textSize: 32,
       contrast: 35,
@@ -470,6 +494,20 @@ const DvRenderer = {
     const dvTextAlign = dvState.align === 'center' ? 'center' : (dvState.align === 'right' ? 'right' : 'left');
     const dvAlignX = dvTextAlign === 'center' ? dvW / 2 : (dvTextAlign === 'right' ? dvW - dvMargin : dvMargin);
 
+    // Author / credit — rendered BEHIND the headline and body, large and
+    // centered within the artwork itself, so the work sits in front of it
+    // rather than the credit trailing far below everything else.
+    if (dvState.author) {
+      dvCtx.save();
+      dvCtx.globalAlpha = 0.14;
+      dvCtx.font = `700 ${Math.round(Math.min(dvW, dvH) * 0.16)}px ${dvState.font}`;
+      dvCtx.fillStyle = dvState.imagePos === 'background' ? '#FFFFFF' : (dvState.headlineColor || dvState.primaryColor);
+      dvCtx.textAlign = 'center';
+      dvCtx.textBaseline = 'middle';
+      dvCtx.fillText(dvState.author, dvW / 2, dvH / 2);
+      dvCtx.restore();
+    }
+
     // Foreground image top
     if (dvImg && dvState.imagePos === 'top') {
       const dvImgH = Math.round(dvH * 0.32);
@@ -521,15 +559,7 @@ const DvRenderer = {
       dvCtx.font = `600 19px ${dvState.font}`;
       dvCtx.fillStyle = dvState.imagePos === 'background' ? '#EEEEEE' : '#777777';
       dvCtx.textAlign = 'center';
-      dvCtx.fillText(dvState.footer, dvW / 2, dvH - dvMargin * (dvState.author ? 0.95 : 0.55));
-    }
-
-    // Author / credit line
-    if (dvState.author) {
-      dvCtx.font = `400 19px ${dvState.font}`;
-      dvCtx.fillStyle = dvState.imagePos === 'background' ? '#DDDDDD' : '#999999';
-      dvCtx.textAlign = 'center';
-      dvCtx.fillText('— ' + dvState.author, dvW / 2, dvH - dvMargin * 0.4);
+      dvCtx.fillText(dvState.footer, dvW / 2, dvH - dvMargin * 0.55);
     }
 
     this.dvDrawWatermark(dvCtx, dvW, dvH, dvState);
@@ -539,14 +569,29 @@ const DvRenderer = {
   },
 
   dvDrawWatermark(dvCtx, dvW, dvH, dvState) {
-    if (!dvState.watermarkEnabled || !dvState.watermarkText) return;
+    // Hardcoded, always-on, tiled diagonally across the entire canvas so it
+    // can't be cropped out by a screenshot — this is intentionally not a
+    // user-configurable setting (see DV_WATERMARK_TEXT at top of file).
     dvCtx.save();
-    dvCtx.globalAlpha = 0.35;
-    dvCtx.font = `700 ${Math.max(19, Math.round(Math.min(dvW, dvH) * 0.045))}px ${dvState.font}`;
+    dvCtx.globalAlpha = 0.16;
+    const dvFontSize = Math.max(19, Math.round(Math.min(dvW, dvH) * 0.07));
+    dvCtx.font = `700 ${dvFontSize}px ${dvState.font}`;
     dvCtx.fillStyle = '#000000';
-    dvCtx.textAlign = 'right';
-    dvCtx.textBaseline = 'bottom';
-    dvCtx.fillText(dvState.watermarkText, dvW - 10, dvH - 8);
+    dvCtx.textAlign = 'center';
+    dvCtx.textBaseline = 'middle';
+
+    dvCtx.translate(dvW / 2, dvH / 2);
+    dvCtx.rotate(-Math.PI / 8);
+    dvCtx.translate(-dvW / 2, -dvH / 2);
+
+    const dvStepX = dvFontSize * (DV_WATERMARK_TEXT.length * 0.62 + 3);
+    const dvStepY = dvFontSize * 2.4;
+    const dvSpan = Math.max(dvW, dvH) * 1.6;
+    for (let dvY = -dvSpan / 2; dvY < dvSpan; dvY += dvStepY) {
+      for (let dvX = -dvSpan / 2; dvX < dvSpan; dvX += dvStepX) {
+        dvCtx.fillText(DV_WATERMARK_TEXT, dvX, dvY);
+      }
+    }
     dvCtx.restore();
   },
 
@@ -578,6 +623,17 @@ const DvRenderer = {
     dvCtx.clip();
     dvCtx.fillStyle = dvState.secondaryColor || '#FFFFFF';
     dvCtx.fillRect(0, 0, dvW, dvH);
+
+    if (dvState.author) {
+      dvCtx.save();
+      dvCtx.globalAlpha = 0.14;
+      dvCtx.font = `700 ${Math.round(dvInnerR * 0.3)}px ${dvState.font}`;
+      dvCtx.fillStyle = dvState.headlineColor || dvState.primaryColor;
+      dvCtx.textAlign = 'center';
+      dvCtx.textBaseline = 'middle';
+      dvCtx.fillText(dvState.author, dvCx, dvCy);
+      dvCtx.restore();
+    }
 
     const dvImg = dvState.dvImageEl || null;
     const dvMargin = Math.round(dvInnerR * 0.28);
@@ -623,6 +679,18 @@ const DvRenderer = {
     }
 
     const dvMargin = Math.round(dvW * 0.06);
+
+    if (dvState.author) {
+      dvCtx.save();
+      dvCtx.globalAlpha = 0.14;
+      dvCtx.font = `700 ${Math.round(dvBandH * 0.5)}px ${dvState.font}`;
+      dvCtx.fillStyle = dvImg ? '#FFFFFF' : (dvState.headlineColor || dvState.primaryColor);
+      dvCtx.textAlign = 'center';
+      dvCtx.textBaseline = 'middle';
+      dvCtx.fillText(dvState.author, dvW / 2, dvBandH / 2);
+      dvCtx.restore();
+    }
+
     dvCtx.textAlign = dvState.align === 'center' ? 'center' : (dvState.align === 'right' ? 'right' : 'left');
     const dvAlignX = dvState.align === 'center' ? dvW / 2 : (dvState.align === 'right' ? dvW - dvMargin : dvMargin);
     dvCtx.textBaseline = 'top';
@@ -805,6 +873,38 @@ const DvQuality = {
    11. Editor controller
    ========================================================================== */
 
+const DvEmoji = {
+  dvSet: ['✝️','🙏','😍','🔥','🎉','👍','👏','💯','❤️','⭐',
+          '✅','⚡','🎁','📢','🚀','🙌','😎','🤩','😢','😡',
+          '🥳','🤔','👀','💪','🌟','☀️','🛐','🎵','📸','📝'],
+  dvLastTarget: null,
+
+  dvInit() {
+    dvQsa('.dv-emoji-target').forEach((dvEl) => {
+      dvEl.addEventListener('focus', () => { this.dvLastTarget = dvEl; });
+    });
+    this.dvLastTarget = dvQs('#dvHeadlineInput');
+
+    const dvGrid = dvQs('#dvEmojiGrid');
+    dvGrid.innerHTML = this.dvSet.map((dvE) => `<button class="dv-emoji-btn" type="button">${dvE}</button>`).join('');
+    dvQsa('.dv-emoji-btn', dvGrid).forEach((dvBtn, dvIdx) => {
+      dvBtn.addEventListener('click', () => this.dvInsert(this.dvSet[dvIdx]));
+    });
+  },
+
+  dvInsert(dvEmojiChar) {
+    const dvTarget = this.dvLastTarget || dvQs('#dvHeadlineInput');
+    const dvStart = dvTarget.selectionStart != null ? dvTarget.selectionStart : dvTarget.value.length;
+    const dvEnd = dvTarget.selectionEnd != null ? dvTarget.selectionEnd : dvTarget.value.length;
+    const dvVal = dvTarget.value;
+    dvTarget.value = dvVal.slice(0, dvStart) + dvEmojiChar + dvVal.slice(dvEnd);
+    const dvNewPos = dvStart + dvEmojiChar.length;
+    if (dvTarget.setSelectionRange) dvTarget.setSelectionRange(dvNewPos, dvNewPos);
+    dvTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    dvTarget.focus();
+  }
+};
+
 const DvEditor = {
   dvCanvas: null,
 
@@ -896,18 +996,10 @@ const DvEditor = {
       dvReader.readAsDataURL(dvFile);
     });
 
-    dvQs('#dvPrimaryColorInput').addEventListener('input', (e) => { dvS().primaryColor = e.target.value; this.dvRender(); });
-    dvQs('#dvSecondaryColorInput').addEventListener('input', (e) => { dvS().secondaryColor = e.target.value; this.dvRender(); });
-    dvQs('#dvHeadlineColorInput').addEventListener('input', (e) => { dvS().headlineColor = e.target.value; this.dvRender(); });
-    dvQs('#dvBodyColorInput').addEventListener('input', (e) => { dvS().bodyColor = e.target.value; this.dvRender(); });
-    dvQs('#dvWatermarkTextInput').addEventListener('input', (e) => { dvS().watermarkText = e.target.value; this.dvRender(); });
-    dvQsa('[data-dv-watermark]').forEach((dvBtn) => {
-      dvBtn.addEventListener('click', () => {
-        dvS().watermarkEnabled = dvBtn.getAttribute('data-dv-watermark') === 'on';
-        dvQsa('[data-dv-watermark]').forEach((b) => b.classList.toggle('dv-segmented__opt--active', b === dvBtn));
-        this.dvRender();
-      });
-    });
+    dvQs('#dvPrimaryColorInput').addEventListener('input', (e) => this.dvHandleColorInput(e.target, 'dvPrimarySwatch', 'primaryColor'));
+    dvQs('#dvSecondaryColorInput').addEventListener('input', (e) => this.dvHandleColorInput(e.target, 'dvSecondarySwatch', 'secondaryColor'));
+    dvQs('#dvHeadlineColorInput').addEventListener('input', (e) => this.dvHandleColorInput(e.target, 'dvHeadlineSwatch', 'headlineColor'));
+    dvQs('#dvBodyColorInput').addEventListener('input', (e) => this.dvHandleColorInput(e.target, 'dvBodySwatch', 'bodyColor'));
     dvQs('#dvFontSelect').addEventListener('change', (e) => { dvS().font = e.target.value; this.dvRender(); });
     dvQs('#dvTextSizeSlider').addEventListener('input', (e) => { dvS().textSize = Number(e.target.value); this.dvRender(); });
     dvQs('#dvContrastSlider').addEventListener('input', (e) => { dvS().contrast = Number(e.target.value); this.dvRender(); });
@@ -955,6 +1047,21 @@ const DvEditor = {
     });
   },
 
+  dvHandleColorInput(dvInputEl, dvSwatchId, dvStateKey) {
+    const dvRaw = dvInputEl.value.trim();
+    const dvHex = DvColor.dvToHex(dvRaw);
+    const dvSwatch = dvQs('#' + dvSwatchId);
+    if (dvHex) {
+      dvInputEl.classList.remove('dv-field__input--invalid');
+      dvSwatch.style.background = dvHex;
+      DvDesign.dvState[dvStateKey] = dvHex;
+      this.dvRender();
+    } else {
+      dvInputEl.classList.add('dv-field__input--invalid');
+      dvSwatch.style.background = 'transparent';
+    }
+  },
+
   dvApplyCanvasSize() {
     this.dvCanvas.width = DvDesign.dvState.width;
     this.dvCanvas.height = DvDesign.dvState.height;
@@ -970,8 +1077,10 @@ const DvEditor = {
     dvQs('#dvSecondaryColorInput').value = dvS.secondaryColor;
     dvQs('#dvHeadlineColorInput').value = dvS.headlineColor || dvS.primaryColor;
     dvQs('#dvBodyColorInput').value = dvS.bodyColor || '#333333';
-    dvQs('#dvWatermarkTextInput').value = dvS.watermarkText || '';
-    dvQsa('[data-dv-watermark]').forEach((b) => b.classList.toggle('dv-segmented__opt--active', (b.getAttribute('data-dv-watermark') === 'on') === (dvS.watermarkEnabled !== false)));
+    dvQs('#dvPrimarySwatch').style.background = dvS.primaryColor;
+    dvQs('#dvSecondarySwatch').style.background = dvS.secondaryColor;
+    dvQs('#dvHeadlineSwatch').style.background = dvS.headlineColor || dvS.primaryColor;
+    dvQs('#dvBodySwatch').style.background = dvS.bodyColor || '#333333';
     dvQs('#dvFontSelect').value = dvS.font;
     dvQs('#dvTextSizeSlider').value = dvS.textSize;
     dvQs('#dvContrastSlider').value = dvS.contrast;
@@ -1352,16 +1461,31 @@ const DvGifEncoder = {
 const DvExport = {
   dvOpenMenu() {
     const dvAnchor = dvQs('#dvExportBtn');
-    DvMenu.dvOpen(dvAnchor, [
-      { label: 'Export as PNG', icon: 'open', onClick: () => this.dvExportStatic('png') },
-      { label: 'Export as JPEG', icon: 'open', onClick: () => this.dvExportStatic('jpeg') },
-      { label: 'Export as GIF', icon: 'open', onClick: () => this.dvExportGif() },
+    const dvKind = DvDesign.dvState.kind;
+    const dvItems = [];
+
+    if (dvKind === 'sticker') {
+      dvItems.push({ label: 'Export as Sticker (WEBP, transparent)', icon: 'open', onClick: () => this.dvExportSticker() });
+      dvItems.push({ label: 'Export as PNG', icon: 'open', onClick: () => this.dvExportStatic('png') });
+    } else if (dvKind === 'ticker' || dvKind === 'gif') {
+      dvItems.push({ label: 'Export as GIF', icon: 'open', onClick: () => this.dvExportGif() });
+      dvItems.push({ label: 'Export as Video (MP4/WebM)', icon: 'open', onClick: () => this.dvExportVideo() });
+      dvItems.push({ label: 'Export as PNG (single frame)', icon: 'open', onClick: () => this.dvExportStatic('png') });
+    } else {
+      dvItems.push({ label: 'Export as PNG', icon: 'open', onClick: () => this.dvExportStatic('png') });
+      dvItems.push({ label: 'Export as JPEG', icon: 'open', onClick: () => this.dvExportStatic('jpeg') });
+      dvItems.push({ label: 'Export as GIF', icon: 'open', onClick: () => this.dvExportGif() });
+    }
+
+    dvItems.push(
       { label: 'Share to WhatsApp', icon: 'whatsapp', onClick: () => this.dvExportAndShare('whatsapp') },
       { label: 'Share to Facebook', icon: 'facebook', onClick: () => this.dvExportAndShare('facebook') },
       { label: 'Share via Email', icon: 'share', onClick: () => this.dvExportAndShare('email') },
       { label: 'Android Share Sheet', icon: 'share', onClick: () => this.dvExportAndShare('native') },
       { label: 'Exit', icon: 'exit', onClick: () => {} }
-    ]);
+    );
+
+    DvMenu.dvOpen(dvAnchor, dvItems);
   },
 
   dvExportStatic(dvFormat) {
@@ -1376,6 +1500,23 @@ const DvExport = {
       setTimeout(() => URL.revokeObjectURL(dvUrl), 4000);
       DvToast.dvShow('Exported ' + dvFormat.toUpperCase(), 'success');
     }, dvMime, 0.92);
+  },
+
+  dvExportSticker() {
+    // WhatsApp-style sticker export: transparent WEBP, natively supported by canvas.toBlob — no library needed.
+    const dvCanvas = DvEditor.dvCanvas;
+    const dvSupportsWebp = dvCanvas.toDataURL('image/webp').indexOf('image/webp') === 5;
+    const dvMime = dvSupportsWebp ? 'image/webp' : 'image/png';
+    const dvExt = dvSupportsWebp ? 'webp' : 'png';
+    dvCanvas.toBlob((dvBlob) => {
+      const dvUrl = URL.createObjectURL(dvBlob);
+      const dvA = document.createElement('a');
+      dvA.href = dvUrl;
+      dvA.download = `dv-suite-sticker.${dvExt}`;
+      dvA.click();
+      setTimeout(() => URL.revokeObjectURL(dvUrl), 4000);
+      DvToast.dvShow(dvSupportsWebp ? 'Sticker exported (WEBP)' : 'WEBP unsupported — exported PNG instead', 'success');
+    }, dvMime, 0.95);
   },
 
   dvExportGif() {
@@ -1432,6 +1573,145 @@ const DvExport = {
     const dvCanvas = DvEditor.dvCanvas;
     const dvDataUrl = dvCanvas.toDataURL('image/png');
     DvShare.dvShareDataUrl(dvDataUrl, 'dv-suite-design.png', dvChannel);
+  },
+
+  /* ------------------------------------------------------------------
+     Video export: canvas.captureStream() + MediaRecorder are native
+     browser APIs, not external libraries. We try real MP4 first; if
+     the device can't record MP4 natively we fall back to WebM (also
+     a real, playable video format) with no dependency at all. Only if
+     native MP4 isn't available do we lazy-load a minimal, well-known
+     CDN-hosted transcoder to produce a true MP4 as well — never on
+     the default path, and never blocking the WebM the user already got.
+     ------------------------------------------------------------------ */
+
+  dvPickVideoMime() {
+    const dvCandidates = [
+      { mime: 'video/mp4;codecs=avc1', ext: 'mp4' },
+      { mime: 'video/mp4', ext: 'mp4' },
+      { mime: 'video/webm;codecs=vp9', ext: 'webm' },
+      { mime: 'video/webm;codecs=vp8', ext: 'webm' },
+      { mime: 'video/webm', ext: 'webm' }
+    ];
+    for (const dvC of dvCandidates) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(dvC.mime)) return dvC;
+    }
+    return null;
+  },
+
+  dvExportVideo() {
+    if (!window.MediaRecorder || !DvEditor.dvCanvas.captureStream) {
+      DvToast.dvShow('Video recording is not supported on this browser', 'error');
+      return;
+    }
+    const dvPick = this.dvPickVideoMime();
+    if (!dvPick) {
+      DvToast.dvShow('No supported video format found on this device', 'error');
+      return;
+    }
+
+    const dvState = DvDesign.dvState;
+    const dvDurationSec = dvClamp(dvState.durationSec || 5, 1, 300);
+    const dvCanvas = DvEditor.dvCanvas;
+    const dvFps = 24;
+    const dvStream = dvCanvas.captureStream(dvFps);
+    const dvRecorder = new MediaRecorder(dvStream, { mimeType: dvPick.mime });
+    const dvChunks = [];
+
+    dvQs('#dvExportProgressTitle').textContent = `Recording video (0/${dvDurationSec}s)…`;
+    dvQs('#dvExportProgressFill').style.width = '0%';
+    dvQs('#dvExportConfirm').classList.add('dv-confirm--open');
+
+    dvRecorder.ondataavailable = (dvEvt) => { if (dvEvt.data && dvEvt.data.size > 0) dvChunks.push(dvEvt.data); };
+
+    let dvStartTime = null;
+    let dvRafId = null;
+    const dvAnimateFrame = (dvNow) => {
+      if (!dvStartTime) dvStartTime = dvNow;
+      const dvElapsed = (dvNow - dvStartTime) / 1000;
+      const dvT = (dvElapsed % dvDurationSec) / dvDurationSec;
+      DvRenderer.dvRenderTicker(dvCanvas, dvState, dvT);
+      dvQs('#dvExportProgressTitle').textContent = `Recording video (${Math.min(dvDurationSec, dvElapsed).toFixed(1)}/${dvDurationSec}s)…`;
+      dvQs('#dvExportProgressFill').style.width = Math.min(100, Math.round((dvElapsed / dvDurationSec) * 100)) + '%';
+      if (dvElapsed < dvDurationSec) {
+        dvRafId = requestAnimationFrame(dvAnimateFrame);
+      } else {
+        dvRecorder.stop();
+      }
+    };
+
+    dvRecorder.onstop = () => {
+      if (dvRafId) cancelAnimationFrame(dvRafId);
+      const dvBlob = new Blob(dvChunks, { type: dvPick.mime.split(';')[0] });
+      dvQs('#dvExportConfirm').classList.remove('dv-confirm--open');
+
+      if (dvPick.ext === 'mp4') {
+        this.dvDownloadBlob(dvBlob, 'dv-suite-design.mp4');
+        DvToast.dvShow('Video exported (MP4)', 'success');
+      } else {
+        this.dvOfferMp4Transcode(dvBlob);
+      }
+    };
+
+    dvRecorder.start();
+    dvRafId = requestAnimationFrame(dvAnimateFrame);
+
+    dvQs('#dvExportCancelBtn').onclick = () => {
+      if (dvRecorder.state !== 'inactive') dvRecorder.stop();
+      if (dvRafId) cancelAnimationFrame(dvRafId);
+      dvQs('#dvExportConfirm').classList.remove('dv-confirm--open');
+    };
+  },
+
+  dvDownloadBlob(dvBlob, dvFilename) {
+    const dvUrl = URL.createObjectURL(dvBlob);
+    const dvA = document.createElement('a');
+    dvA.href = dvUrl; dvA.download = dvFilename; dvA.click();
+    setTimeout(() => URL.revokeObjectURL(dvUrl), 4000);
+  },
+
+  dvOfferMp4Transcode(dvWebmBlob) {
+    this.dvDownloadBlob(dvWebmBlob, 'dv-suite-design.webm');
+    DvToast.dvShow('This device recorded WebM. Converting a copy to real MP4…');
+    this.dvTranscodeWebmToMp4(dvWebmBlob)
+      .then((dvMp4Blob) => {
+        this.dvDownloadBlob(dvMp4Blob, 'dv-suite-design.mp4');
+        DvToast.dvShow('MP4 conversion complete', 'success');
+      })
+      .catch(() => {
+        DvToast.dvShow('MP4 conversion needs an internet connection — WebM was saved instead', 'error');
+      });
+  },
+
+  // Loaded only on demand, only when native MP4 recording isn't available.
+  // jsDelivr is used here specifically because it serves the official,
+  // unmodified @ffmpeg/ffmpeg package straight from its npm release —
+  // a widely trusted, version-pinned CDN, not an arbitrary third party.
+  dvFfmpegLoadPromise: null,
+  dvLoadFfmpeg() {
+    if (this.dvFfmpegLoadPromise) return this.dvFfmpegLoadPromise;
+    this.dvFfmpegLoadPromise = new Promise((dvResolve, dvReject) => {
+      if (window.FFmpeg) { dvResolve(window.FFmpeg); return; }
+      const dvScript = document.createElement('script');
+      dvScript.src = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js';
+      dvScript.onload = () => window.FFmpeg ? dvResolve(window.FFmpeg) : dvReject(new Error('dv-ffmpeg-load-failed'));
+      dvScript.onerror = () => dvReject(new Error('dv-ffmpeg-network-failed'));
+      document.head.appendChild(dvScript);
+    });
+    return this.dvFfmpegLoadPromise;
+  },
+
+  async dvTranscodeWebmToMp4(dvWebmBlob) {
+    const dvFFmpegNs = await this.dvLoadFfmpeg();
+    const dvFFmpeg = new dvFFmpegNs.FFmpeg();
+    await dvFFmpeg.load({
+      coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js'
+    });
+    const dvInputBytes = new Uint8Array(await dvWebmBlob.arrayBuffer());
+    await dvFFmpeg.writeFile('input.webm', dvInputBytes);
+    await dvFFmpeg.exec(['-i', 'input.webm', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', 'output.mp4']);
+    const dvOutData = await dvFFmpeg.readFile('output.mp4');
+    return new Blob([dvOutData.buffer], { type: 'video/mp4' });
   }
 };
 
@@ -1554,6 +1834,7 @@ document.addEventListener('DOMContentLoaded', () => {
   DvModal.dvInit();
   DvFiles.dvInit();
   DvEditor.dvInit();
+  DvEmoji.dvInit();
   dvWireMorePage();
   dvRegisterServiceWorker();
   DvFiles.dvRenderRecent();
