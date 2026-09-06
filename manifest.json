@@ -1,0 +1,19 @@
+{
+  "name": "DV-SUITE Sticker & GIF Generator",
+  "short_name": "DV-SUITE",
+  "description": "An offline-first studio for making shareable stickers, GIFs, and visual messages.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F1F4F9",
+  "theme_color": "#1877F2",
+  "icons": [
+    {
+      "src": "https://i.ibb.co/jPjDv305/file-00000000bb108210abd56f13daab92da.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
