@@ -1,22 +1,52 @@
-const DV_CACHE = 'dv-suite-copyout-v1';
-const DV_SHELL = ['./', './index.html', './styles.css', './scripts.js', './manifest.json'];
+/* DV-SUITE Service Worker — offline-first cache, no external dependencies */
+const DV_CACHE_NAME = 'dv-suite-cache-v1';
+const DV_CORE_ASSETS = [
+  './',
+  './index.html',
+  './styles.css',
+  './scripts.js',
+  './manifest.json'
+];
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(DV_CACHE).then((cache) => cache.addAll(DV_SHELL)));
+self.addEventListener('install', (dvEvent) => {
+  dvEvent.waitUntil(
+    caches.open(DV_CACHE_NAME).then((dvCache) => dvCache.addAll(DV_CORE_ASSETS))
+  );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+self.addEventListener('activate', (dvEvent) => {
+  dvEvent.waitUntil(
+    caches.keys().then((dvKeys) => Promise.all(
+      dvKeys.filter((dvKey) => dvKey !== DV_CACHE_NAME).map((dvKey) => caches.delete(dvKey))
+    ))
+  );
+  self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
-      const copy = response.clone();
-      caches.open(DV_CACHE).then((cache) => cache.put(event.request, copy));
-      return response;
-    }).catch(() => caches.match('./index.html')))
+self.addEventListener('fetch', (dvEvent) => {
+  if (dvEvent.request.method !== 'GET') return;
+
+  dvEvent.respondWith(
+    caches.match(dvEvent.request).then((dvCached) => {
+      if (dvCached) return dvCached;
+
+      return fetch(dvEvent.request)
+        .then((dvResponse) => {
+          if (!dvResponse || dvResponse.status !== 200 || dvResponse.type !== 'basic') {
+            return dvResponse;
+          }
+          const dvResponseClone = dvResponse.clone();
+          caches.open(DV_CACHE_NAME).then((dvCache) => {
+            dvCache.put(dvEvent.request, dvResponseClone);
+          });
+          return dvResponse;
+        })
+        .catch(() => {
+          if (dvEvent.request.mode === 'navigate') {
+            return caches.match('./index.html');
+          }
+        });
+    })
   );
 });
