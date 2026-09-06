@@ -6,7 +6,6 @@
 <title>DV-SUITE — Sticker & GIF Generator</title>
 <meta name="description" content="DV-SUITE: create and share stickers, tickers and GIFs entirely offline on your Android phone.">
 
-<!-- Open Graph / WhatsApp & Facebook link preview -->
 <meta property="og:title" content="DV-SUITE — Sticker & GIF Generator">
 <meta property="og:description" content="Create and share stickers, tickers and GIFs entirely offline on Android.">
 <meta property="og:type" content="website">
@@ -21,9 +20,9 @@
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+
 <div class="dv-app" id="dvApp">
 
-  <!-- ===================== TOP BAR ===================== -->
   <header class="dv-topbar" id="dvTopbar">
     <button class="dv-icon-btn" id="dvBackBtn" aria-label="Back">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
@@ -121,19 +120,23 @@
           <div class="dv-editor__panel" data-dv-panel="content">
             <div class="dv-field">
               <label class="dv-field__label">Headline</label>
-              <textarea class="dv-field__textarea" id="dvHeadlineInput" placeholder="Enter headline text"></textarea>
+              <textarea class="dv-field__textarea dv-emoji-target" id="dvHeadlineInput" placeholder="Enter headline text"></textarea>
             </div>
             <div class="dv-field">
               <label class="dv-field__label">Body text</label>
-              <textarea class="dv-field__textarea" id="dvBodyInput" placeholder="Enter supporting text"></textarea>
+              <textarea class="dv-field__textarea dv-emoji-target" id="dvBodyInput" placeholder="Enter supporting text"></textarea>
             </div>
             <div class="dv-field">
               <label class="dv-field__label">Footer (optional)</label>
-              <input class="dv-field__input" type="text" id="dvFooterInput" placeholder="Enter footer text">
+              <input class="dv-field__input dv-emoji-target" type="text" id="dvFooterInput" placeholder="Enter footer text">
             </div>
             <div class="dv-field">
               <label class="dv-field__label">Author / Credit (optional)</label>
-              <input class="dv-field__input" type="text" id="dvAuthorInput" placeholder="e.g. your name or handle">
+              <input class="dv-field__input dv-emoji-target" type="text" id="dvAuthorInput" placeholder="e.g. your name or handle">
+            </div>
+            <div class="dv-field">
+              <label class="dv-field__label">Insert emoji into the field you last tapped above</label>
+              <div class="dv-emoji-grid" id="dvEmojiGrid"></div>
             </div>
             <div class="dv-field">
               <label class="dv-field__label">Image</label>
@@ -145,33 +148,34 @@
             <div class="dv-field__row">
               <div class="dv-field">
                 <label class="dv-field__label">Primary colour</label>
-                <input class="dv-field__color" type="color" id="dvPrimaryColorInput" value="#1877F2">
+                <div class="dv-colorfield">
+                  <span class="dv-colorfield__swatch" id="dvPrimarySwatch"></span>
+                  <input class="dv-field__input" type="text" id="dvPrimaryColorInput" value="#1877F2" placeholder="hex or name, e.g. blue">
+                </div>
               </div>
               <div class="dv-field">
                 <label class="dv-field__label">Secondary colour</label>
-                <input class="dv-field__color" type="color" id="dvSecondaryColorInput" value="#FFFFFF">
+                <div class="dv-colorfield">
+                  <span class="dv-colorfield__swatch" id="dvSecondarySwatch"></span>
+                  <input class="dv-field__input" type="text" id="dvSecondaryColorInput" value="#FFFFFF" placeholder="hex or name, e.g. white">
+                </div>
               </div>
             </div>
             <div class="dv-field__row">
               <div class="dv-field">
                 <label class="dv-field__label">Headline text colour</label>
-                <input class="dv-field__color" type="color" id="dvHeadlineColorInput" value="#1877F2">
+                <div class="dv-colorfield">
+                  <span class="dv-colorfield__swatch" id="dvHeadlineSwatch"></span>
+                  <input class="dv-field__input" type="text" id="dvHeadlineColorInput" value="#1877F2" placeholder="hex or name, e.g. navy">
+                </div>
               </div>
               <div class="dv-field">
                 <label class="dv-field__label">Body text colour</label>
-                <input class="dv-field__color" type="color" id="dvBodyColorInput" value="#333333">
+                <div class="dv-colorfield">
+                  <span class="dv-colorfield__swatch" id="dvBodySwatch"></span>
+                  <input class="dv-field__input" type="text" id="dvBodyColorInput" value="#333333" placeholder="hex or name, e.g. gray">
+                </div>
               </div>
-            </div>
-            <div class="dv-field">
-              <label class="dv-field__label">Watermark</label>
-              <div class="dv-segmented" id="dvWatermarkSegmented">
-                <button class="dv-segmented__opt dv-segmented__opt--active" data-dv-watermark="on">On</button>
-                <button class="dv-segmented__opt" data-dv-watermark="off">Off</button>
-              </div>
-            </div>
-            <div class="dv-field">
-              <label class="dv-field__label">Watermark text</label>
-              <input class="dv-field__input" type="text" id="dvWatermarkTextInput" placeholder="DV-SUITE" value="DV-SUITE">
             </div>
             <div class="dv-field">
               <label class="dv-field__label">Font</label>
@@ -251,7 +255,6 @@
           <div class="dv-editor__panel" data-dv-panel="quality">
             <ul class="dv-qc-list" id="dvQualityList"></ul>
           </div>
-
         </div>
 
         <div class="dv-editor__footer">
@@ -299,7 +302,6 @@
         </button>
       </div>
     </section>
-
   </main>
 
   <!-- ===================== BOTTOM NAV ===================== -->
@@ -321,7 +323,6 @@
       <span class="dv-bottomnav__label">More</span>
     </button>
   </nav>
-
 </div>
 
 <!-- ===================== INFO SIDEBAR (hamburger) ===================== -->
@@ -424,3 +425,4 @@
 <script src="./scripts.js"></script>
 </body>
 </html>
+  
