@@ -1,5 +1,7 @@
 /* ==========================================================================
    DV-SUITE — scripts.js
+   Vanilla ES6+, zero external dependencies, zero frameworks.
+   All identifiers prefixed dv / DV.
    ========================================================================== */
 
 'use strict';
@@ -355,14 +357,20 @@ const DvDesign = {
   dvNew() {
     this.dvState = {
       id: null,
+      kind: 'design', // 'design' | 'sticker' | 'ticker' | 'gif' — drives the rendering engine's shape/behavior
       template: 'centered-headline',
       headline: 'Your Headline Here',
       body: 'Supporting text goes here. It will wrap and resize to stay readable.',
       footer: '',
+      author: '',
       imageDataUrl: null,
       imagePos: 'top',
       primaryColor: '#1877F2',
       secondaryColor: '#FFFFFF',
+      headlineColor: '#1877F2',
+      bodyColor: '#333333',
+      watermarkEnabled: true,
+      watermarkText: 'DV-SUITE',
       font: "Roboto, system-ui, sans-serif",
       textSize: 32,
       contrast: 35,
@@ -426,6 +434,12 @@ const DvRenderer = {
   },
 
   dvDrawFrame(dvCanvas, dvState, dvAnimT) {
+    if (dvState.kind === 'sticker') { this.dvDrawStickerFrame(dvCanvas, dvState); return; }
+    if (dvState.kind === 'ticker') { this.dvDrawTickerBannerFrame(dvCanvas, dvState, dvAnimT || 0); return; }
+    this.dvDrawStandardFrame(dvCanvas, dvState);
+  },
+
+  dvDrawStandardFrame(dvCanvas, dvState) {
     const dvCtx = dvCanvas.getContext('2d');
     const dvW = dvCanvas.width, dvH = dvCanvas.height;
     const dvMargin = Math.round(Math.min(dvW, dvH) * 0.08);
@@ -466,7 +480,7 @@ const DvRenderer = {
     // Headline
     dvCtx.textAlign = dvTextAlign;
     dvCtx.textBaseline = 'top';
-    dvCtx.fillStyle = dvState.imagePos === 'background' ? '#FFFFFF' : dvState.primaryColor;
+    dvCtx.fillStyle = dvState.imagePos === 'background' ? '#FFFFFF' : (dvState.headlineColor || dvState.primaryColor);
 
     const dvHeadlineMaxH = dvH * 0.32;
     const dvFit = this.dvFitFontSize(dvCtx, dvState.headline, dvContentW, dvHeadlineMaxH, dvState.textSize, dvState.font, 700);
@@ -482,7 +496,7 @@ const DvRenderer = {
     }
 
     // Body text
-    dvCtx.fillStyle = dvState.imagePos === 'background' ? '#F1F1F1' : '#333333';
+    dvCtx.fillStyle = dvState.imagePos === 'background' ? '#F1F1F1' : (dvState.bodyColor || '#333333');
     const dvBodySize = Math.max(19, Math.round(dvState.textSize * 0.5));
     dvCtx.font = `400 ${dvBodySize}px ${dvState.font}`;
     const dvBodyMaxH = dvH - dvCursorY - dvMargin * (dvState.footer ? 2.2 : 1.2) - (dvState.imagePos === 'bottom' ? dvH * 0.3 : 0);
@@ -507,11 +521,130 @@ const DvRenderer = {
       dvCtx.font = `600 19px ${dvState.font}`;
       dvCtx.fillStyle = dvState.imagePos === 'background' ? '#EEEEEE' : '#777777';
       dvCtx.textAlign = 'center';
-      dvCtx.fillText(dvState.footer, dvW / 2, dvH - dvMargin * 0.55);
+      dvCtx.fillText(dvState.footer, dvW / 2, dvH - dvMargin * (dvState.author ? 0.95 : 0.55));
     }
+
+    // Author / credit line
+    if (dvState.author) {
+      dvCtx.font = `400 19px ${dvState.font}`;
+      dvCtx.fillStyle = dvState.imagePos === 'background' ? '#DDDDDD' : '#999999';
+      dvCtx.textAlign = 'center';
+      dvCtx.fillText('— ' + dvState.author, dvW / 2, dvH - dvMargin * 0.4);
+    }
+
+    this.dvDrawWatermark(dvCtx, dvW, dvH, dvState);
 
     // Animation transforms are applied by caller via canvas transform before calling this,
     // so this function always renders the base static frame content.
+  },
+
+  dvDrawWatermark(dvCtx, dvW, dvH, dvState) {
+    if (!dvState.watermarkEnabled || !dvState.watermarkText) return;
+    dvCtx.save();
+    dvCtx.globalAlpha = 0.35;
+    dvCtx.font = `700 ${Math.max(19, Math.round(Math.min(dvW, dvH) * 0.045))}px ${dvState.font}`;
+    dvCtx.fillStyle = '#000000';
+    dvCtx.textAlign = 'right';
+    dvCtx.textBaseline = 'bottom';
+    dvCtx.fillText(dvState.watermarkText, dvW - 10, dvH - 8);
+    dvCtx.restore();
+  },
+
+  dvDrawStickerFrame(dvCanvas, dvState) {
+    // Sticker engine: die-cut circular badge with a thick border ring — visually distinct
+    // from a plain rectangular design, matching how stickers actually get cut/shared.
+    const dvCtx = dvCanvas.getContext('2d');
+    const dvW = dvCanvas.width, dvH = dvCanvas.height;
+    const dvCx = dvW / 2, dvCy = dvH / 2;
+    const dvOuterR = Math.min(dvW, dvH) / 2 - 4;
+    const dvBorderW = Math.max(8, Math.round(dvOuterR * 0.06));
+    const dvInnerR = dvOuterR - dvBorderW;
+
+    dvCtx.clearRect(0, 0, dvW, dvH);
+
+    // Transparent outside the circle (true die-cut look) — checker only shown in editors, exported PNG stays transparent
+    dvCtx.save();
+    dvCtx.beginPath();
+    dvCtx.arc(dvCx, dvCy, dvOuterR, 0, Math.PI * 2);
+    dvCtx.clip();
+
+    // Border ring
+    dvCtx.fillStyle = dvState.primaryColor;
+    dvCtx.fillRect(0, 0, dvW, dvH);
+
+    // Face
+    dvCtx.beginPath();
+    dvCtx.arc(dvCx, dvCy, dvInnerR, 0, Math.PI * 2);
+    dvCtx.clip();
+    dvCtx.fillStyle = dvState.secondaryColor || '#FFFFFF';
+    dvCtx.fillRect(0, 0, dvW, dvH);
+
+    const dvImg = dvState.dvImageEl || null;
+    const dvMargin = Math.round(dvInnerR * 0.28);
+    let dvCursorY = dvCy - dvInnerR + dvMargin;
+    const dvContentW = dvInnerR * 2 - dvMargin * 2;
+    const dvContentX = dvCx - dvInnerR + dvMargin;
+
+    if (dvImg) {
+      const dvImgH = Math.round(dvInnerR * 0.7);
+      this.dvDrawCover(dvCtx, dvImg, dvContentX, dvCursorY, dvContentW, dvImgH, 10);
+      dvCursorY += dvImgH + dvMargin * 0.5;
+    }
+
+    dvCtx.textAlign = 'center';
+    dvCtx.textBaseline = 'top';
+    dvCtx.fillStyle = dvState.headlineColor || dvState.primaryColor;
+    const dvFit = this.dvFitFontSize(dvCtx, dvState.headline, dvContentW, dvInnerR * 0.9, dvState.textSize, dvState.font, 700);
+    dvFit.lines.forEach((dvLine, dvIdx) => dvCtx.fillText(dvLine, dvCx, dvCursorY + dvIdx * dvFit.size * 1.2));
+
+    dvCtx.restore(); // release face clip, keep outer circle clip for watermark
+
+    this.dvDrawWatermark(dvCtx, dvW, dvH, dvState);
+    dvCtx.restore(); // release outer circle clip
+  },
+
+  dvDrawTickerBannerFrame(dvCanvas, dvState, dvT) {
+    // Ticker engine: a persistent horizontal marquee banner is the core of the design,
+    // not an optional overlay — this is what makes a "ticker" different from a static sticker.
+    const dvCtx = dvCanvas.getContext('2d');
+    const dvW = dvCanvas.width, dvH = dvCanvas.height;
+    dvCtx.clearRect(0, 0, dvW, dvH);
+
+    // Backdrop band (top ~60%) can carry an image or plain brand color
+    const dvBandH = Math.round(dvH * 0.62);
+    const dvImg = dvState.dvImageEl || null;
+    if (dvImg) {
+      this.dvDrawCover(dvCtx, dvImg, 0, 0, dvW, dvBandH);
+      dvCtx.fillStyle = `rgba(0,0,0,${dvState.contrast / 100})`;
+      dvCtx.fillRect(0, 0, dvW, dvBandH);
+    } else {
+      dvCtx.fillStyle = dvState.secondaryColor || '#FFFFFF';
+      dvCtx.fillRect(0, 0, dvW, dvBandH);
+    }
+
+    const dvMargin = Math.round(dvW * 0.06);
+    dvCtx.textAlign = dvState.align === 'center' ? 'center' : (dvState.align === 'right' ? 'right' : 'left');
+    const dvAlignX = dvState.align === 'center' ? dvW / 2 : (dvState.align === 'right' ? dvW - dvMargin : dvMargin);
+    dvCtx.textBaseline = 'top';
+    dvCtx.fillStyle = dvImg ? '#FFFFFF' : (dvState.headlineColor || dvState.primaryColor);
+    const dvFit = this.dvFitFontSize(dvCtx, dvState.headline, dvW - dvMargin * 2, dvBandH * 0.6, dvState.textSize, dvState.font, 700);
+    dvFit.lines.forEach((dvLine, dvIdx) => dvCtx.fillText(dvLine, dvAlignX, dvMargin * 0.6 + dvIdx * dvFit.size * 1.2));
+
+    // The marquee strip — always present and always animated in exported GIFs
+    const dvBarH = dvH - dvBandH;
+    dvCtx.fillStyle = dvState.primaryColor;
+    dvCtx.fillRect(0, dvBandH, dvW, dvBarH);
+    dvCtx.fillStyle = '#FFFFFF';
+    dvCtx.font = `600 ${Math.max(19, Math.round(dvBarH * 0.45))}px ${dvState.font}`;
+    dvCtx.textBaseline = 'middle';
+    dvCtx.textAlign = 'left';
+    const dvMsg = (dvState.body || dvState.footer || dvState.headline || 'DV-SUITE');
+    const dvTextW = dvCtx.measureText(dvMsg).width;
+    const dvTravel = dvW + dvTextW;
+    const dvX = dvW - dvT * dvTravel;
+    dvCtx.fillText(dvMsg, dvX, dvBandH + dvBarH / 2);
+
+    this.dvDrawWatermark(dvCtx, dvW, dvH, dvState);
   },
 
   dvDrawCover(dvCtx, dvImg, dvX, dvY, dvW, dvH, dvRadius) {
@@ -558,14 +691,16 @@ const DvRenderer = {
       dvCtx.translate(-dvCanvas.width / 2, -dvCanvas.height / 2);
     }
     this.dvDrawFrame(dvCanvas, dvState, dvT);
-    if (dvState.animate === 'scroll') {
-      // Overlay a scrolling ticker strip at the bottom for genuine "ticker" motion
+    // The ticker engine (dvDrawTickerBannerFrame) already renders its own animated marquee
+    // using dvT, and the sticker engine has no scroll bar — only overlay a bottom strip here
+    // for the generic "design" kind when the user explicitly picked the Scrolling Ticker option.
+    if (dvState.animate === 'scroll' && dvState.kind !== 'ticker' && dvState.kind !== 'sticker') {
       const dvBarH = Math.round(dvCanvas.height * 0.09);
       const dvY = dvCanvas.height - dvBarH;
       dvCtx.fillStyle = dvState.primaryColor;
       dvCtx.fillRect(0, dvY, dvCanvas.width, dvBarH);
       dvCtx.fillStyle = '#FFFFFF';
-      dvCtx.font = `600 ${Math.round(dvBarH * 0.5)}px ${dvState.font}`;
+      dvCtx.font = `600 ${Math.max(19, Math.round(dvBarH * 0.5))}px ${dvState.font}`;
       dvCtx.textBaseline = 'middle';
       dvCtx.textAlign = 'left';
       const dvMsg = (dvState.footer || dvState.headline || 'DV-SUITE');
@@ -618,7 +753,7 @@ const DvQuality = {
     });
 
     // Contrast check
-    const dvRatio = this.dvContrastRatio(dvState.primaryColor, dvState.secondaryColor);
+    const dvRatio = this.dvContrastRatio(dvState.headlineColor || dvState.primaryColor, dvState.secondaryColor);
     dvResults.push({
       label: 'Readability / contrast',
       pass: dvRatio >= 3,
@@ -699,8 +834,17 @@ const DvEditor = {
 
   dvStartNew(dvKind) {
     DvDesign.dvNew();
-    if (dvKind === 'ticker') { DvDesign.dvState.animate = 'scroll'; DvDesign.dvState.template = 'text-focused'; }
-    if (dvKind === 'gif') { DvDesign.dvState.animate = 'pulse'; }
+    const dvS = DvDesign.dvState;
+    if (dvKind === 'sticker') {
+      dvS.kind = 'sticker'; dvS.template = 'centered-headline'; dvS.aspect = '1:1'; dvS.animate = 'none';
+      dvS.headline = 'Your Sticker'; dvS.body = '';
+    } else if (dvKind === 'ticker') {
+      dvS.kind = 'ticker'; dvS.template = 'text-focused'; dvS.aspect = '16:9'; dvS.animate = 'scroll';
+      dvS.headline = 'Breaking News'; dvS.body = 'Scrolling ticker message goes here';
+    } else if (dvKind === 'gif') {
+      dvS.kind = 'gif'; dvS.animate = 'pulse'; dvS.aspect = '1:1';
+    }
+    DvDesign.dvSyncDimensionsFromAspect();
     this.dvSyncFieldsFromState();
     DvRouter.dvGoTo('editor', true);
     this.dvRender();
@@ -737,6 +881,7 @@ const DvEditor = {
     dvQs('#dvHeadlineInput').addEventListener('input', (e) => { dvS().headline = e.target.value; this.dvRender(); });
     dvQs('#dvBodyInput').addEventListener('input', (e) => { dvS().body = e.target.value; this.dvRender(); });
     dvQs('#dvFooterInput').addEventListener('input', (e) => { dvS().footer = e.target.value; this.dvRender(); });
+    dvQs('#dvAuthorInput').addEventListener('input', (e) => { dvS().author = e.target.value; this.dvRender(); });
 
     dvQs('#dvImageInput').addEventListener('change', (e) => {
       const dvFile = e.target.files && e.target.files[0];
@@ -753,6 +898,16 @@ const DvEditor = {
 
     dvQs('#dvPrimaryColorInput').addEventListener('input', (e) => { dvS().primaryColor = e.target.value; this.dvRender(); });
     dvQs('#dvSecondaryColorInput').addEventListener('input', (e) => { dvS().secondaryColor = e.target.value; this.dvRender(); });
+    dvQs('#dvHeadlineColorInput').addEventListener('input', (e) => { dvS().headlineColor = e.target.value; this.dvRender(); });
+    dvQs('#dvBodyColorInput').addEventListener('input', (e) => { dvS().bodyColor = e.target.value; this.dvRender(); });
+    dvQs('#dvWatermarkTextInput').addEventListener('input', (e) => { dvS().watermarkText = e.target.value; this.dvRender(); });
+    dvQsa('[data-dv-watermark]').forEach((dvBtn) => {
+      dvBtn.addEventListener('click', () => {
+        dvS().watermarkEnabled = dvBtn.getAttribute('data-dv-watermark') === 'on';
+        dvQsa('[data-dv-watermark]').forEach((b) => b.classList.toggle('dv-segmented__opt--active', b === dvBtn));
+        this.dvRender();
+      });
+    });
     dvQs('#dvFontSelect').addEventListener('change', (e) => { dvS().font = e.target.value; this.dvRender(); });
     dvQs('#dvTextSizeSlider').addEventListener('input', (e) => { dvS().textSize = Number(e.target.value); this.dvRender(); });
     dvQs('#dvContrastSlider').addEventListener('input', (e) => { dvS().contrast = Number(e.target.value); this.dvRender(); });
@@ -810,8 +965,13 @@ const DvEditor = {
     dvQs('#dvHeadlineInput').value = dvS.headline;
     dvQs('#dvBodyInput').value = dvS.body;
     dvQs('#dvFooterInput').value = dvS.footer;
+    dvQs('#dvAuthorInput').value = dvS.author || '';
     dvQs('#dvPrimaryColorInput').value = dvS.primaryColor;
     dvQs('#dvSecondaryColorInput').value = dvS.secondaryColor;
+    dvQs('#dvHeadlineColorInput').value = dvS.headlineColor || dvS.primaryColor;
+    dvQs('#dvBodyColorInput').value = dvS.bodyColor || '#333333';
+    dvQs('#dvWatermarkTextInput').value = dvS.watermarkText || '';
+    dvQsa('[data-dv-watermark]').forEach((b) => b.classList.toggle('dv-segmented__opt--active', (b.getAttribute('data-dv-watermark') === 'on') === (dvS.watermarkEnabled !== false)));
     dvQs('#dvFontSelect').value = dvS.font;
     dvQs('#dvTextSizeSlider').value = dvS.textSize;
     dvQs('#dvContrastSlider').value = dvS.contrast;
