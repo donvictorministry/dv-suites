@@ -1,5 +1,5 @@
 /* DV-SUITE Service Worker — offline-first cache, no external dependencies */
-const DV_CACHE_NAME = 'dv-suite-cache-v2';
+const DV_CACHE_NAME = 'dv-suite-cache-v2.1';
 const DV_CORE_ASSETS = [
   './',
   './index.html',
