@@ -554,6 +554,33 @@ svg { display: block; }
 .dv-field__textarea { min-height: 96px; resize: vertical; }
 .dv-field__color { width: 100%; height: var(--dv-touch-min); border: 1px solid var(--dv-color-border); border-radius: 8px; padding: 4px; background: var(--dv-color-bg); }
 
+.dv-colorfield { display: flex; align-items: center; gap: var(--dv-space-sm); }
+.dv-colorfield__swatch {
+  flex: 0 0 var(--dv-touch-min);
+  width: var(--dv-touch-min);
+  height: var(--dv-touch-min);
+  border-radius: 8px;
+  border: 1px solid var(--dv-color-border);
+  background: #1877F2;
+}
+.dv-colorfield .dv-field__input { flex: 1; }
+.dv-field__input--invalid { border-color: var(--dv-color-error); }
+
+.dv-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--dv-space-xs);
+}
+.dv-emoji-btn {
+  font-size: 24px;
+  min-height: var(--dv-touch-min);
+  min-width: var(--dv-touch-min);
+  border: 1px solid var(--dv-color-border);
+  border-radius: 8px;
+  background: var(--dv-color-bg);
+}
+.dv-emoji-btn:active { background: var(--dv-color-primary-light); }
+
 .dv-field__row { display: flex; gap: var(--dv-space-sm); }
 .dv-field__row > * { flex: 1; }
 
