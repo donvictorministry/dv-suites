@@ -1,9 +1,10 @@
 /* ==========================================================================
    DV-SUITE — scripts.js
    ========================================================================== */
+
 'use strict';
 
-const DV_WATERMARK_TEXT = 'DON VICTOR MINISTRIES';
+const DV_WATERMARK_TEXT = 'Don Victor Ministries';
 
 /* ==========================================================================
    0. Small utilities
@@ -79,9 +80,10 @@ const DvColor = {
 
 const DvDB = {
   dvName: 'dv-suite-db',
-  dvVersion: 1,
+  dvVersion: 2,
   dvStoreFiles: 'dvFiles',
   dvStoreSettings: 'dvSettings',
+  dvStoreNotes: 'dvNotes',
   dvHandle: null,
 
   dvOpen() {
@@ -96,6 +98,10 @@ const DvDB = {
         }
         if (!dvDb.objectStoreNames.contains(DvDB.dvStoreSettings)) {
           dvDb.createObjectStore(DvDB.dvStoreSettings, { keyPath: 'key' });
+        }
+        if (!dvDb.objectStoreNames.contains(DvDB.dvStoreNotes)) {
+          const dvNoteStore = dvDb.createObjectStore(DvDB.dvStoreNotes, { keyPath: 'id' });
+          dvNoteStore.createIndex('dvUpdatedAt', 'updatedAt');
         }
       };
       dvReq.onsuccess = () => { this.dvHandle = dvReq.result; dvResolve(this.dvHandle); };
@@ -133,12 +139,35 @@ const DvDB = {
       dvReq.onsuccess = () => dvRes();
       dvReq.onerror = () => dvRej(dvReq.error);
     });
+  },
+
+  async dvPutNote(dvNote) {
+    const dvStore = await this.dvTx(this.dvStoreNotes, 'readwrite');
+    return new Promise((dvRes, dvRej) => {
+      const dvReq = dvStore.put(dvNote);
+      dvReq.onsuccess = () => dvRes(dvNote);
+      dvReq.onerror = () => dvRej(dvReq.error);
+    });
+  },
+
+  async dvGetAllNotes() {
+    const dvStore = await this.dvTx(this.dvStoreNotes, 'readonly');
+    return new Promise((dvRes, dvRej) => {
+      const dvReq = dvStore.getAll();
+      dvReq.onsuccess = () => dvRes(dvReq.result.sort((a, b) => b.updatedAt - a.updatedAt));
+      dvReq.onerror = () => dvRej(dvReq.error);
+    });
+  },
+
+  async dvDeleteNote(dvId) {
+    const dvStore = await this.dvTx(this.dvStoreNotes, 'readwrite');
+    return new Promise((dvRes, dvRej) => {
+      const dvReq = dvStore.delete(dvId);
+      dvReq.onsuccess = () => dvRes();
+      dvReq.onerror = () => dvRej(dvReq.error);
+    });
   }
 };
-
-/* ==========================================================================
-   3. Settings (persisted in localStorage — small key/value, sync UI needs)
-   ========================================================================== */
 
 const DvSettings = {
   dvKey: 'dv-suite-settings',
@@ -176,7 +205,9 @@ const DvRouter = {
 
   dvInit() {
     dvQsa('[data-dv-nav]').forEach((dvBtn) => {
-      dvBtn.addEventListener('click', () => this.dvGoTo(dvBtn.getAttribute('data-dv-nav'), true));
+      const dvKey = dvBtn.getAttribute('data-dv-nav');
+      if (dvKey === 'notepad') return; // handled separately — opens a modal, not a router page
+      dvBtn.addEventListener('click', () => this.dvGoTo(dvKey, true));
     });
     dvQs('#dvBackBtn').addEventListener('click', () => this.dvBack());
     window.addEventListener('popstate', () => this.dvBack(true));
@@ -195,6 +226,9 @@ const DvRouter = {
   },
 
   dvBack(dvFromPopstate) {
+    if (DvNotes.dvAnyConfirmOpen()) { DvNotes.dvCloseAnyConfirm(); return; }
+    if (DvNotes.dvIsWorkspaceOpen()) { DvNotes.dvCloseWorkspace(); return; }
+    if (DvNotes.dvIsLandingOpen()) { DvNotes.dvCloseLanding(); return; }
     if (DvModal.dvIsOpen()) { DvModal.dvClose(); return; }
     if (DvSidebars.dvAnyOpen()) { DvSidebars.dvCloseAll(); return; }
     if (this.dvCurrent !== 'home') {
@@ -873,10 +907,17 @@ const DvQuality = {
    11. Editor controller
    ========================================================================== */
 
+/* ==========================================================================
+   10b. Emoji insertion — USER CONTENT ONLY.
+   App UI chrome (nav, sidebars, buttons) stays inline-SVG per spec; this
+   lets the user drop real Unicode emoji into their own headline/body/
+   footer/author text, which is a different thing entirely.
+   ========================================================================== */
+
 const DvEmoji = {
-  dvSet: ['✝️','🙏','😍','🔥','🎉','👍','👏','💯','❤️','⭐',
+  dvSet: ['😀','😂','😍','🔥','🎉','👍','👏','💯','❤️','⭐',
           '✅','⚡','🎁','📢','🚀','🙌','😎','🤩','😢','😡',
-          '🥳','🤔','👀','💪','🌟','☀️','🛐','🎵','📸','📝'],
+          '🥳','🤔','👀','💪','🌟','☀️','🌈','🎵','📸','💬'],
   dvLastTarget: null,
 
   dvInit() {
@@ -1325,6 +1366,294 @@ const DvMenu = {
    14. Internal GIF encoder (GIF89a, LZW) — no external library
    ========================================================================== */
 
+/* ==========================================================================
+   13b. Notepad — landing modal (saved notes) + workspace modal (editor)
+   ========================================================================== */
+
+const DvNotes = {
+  dvCurrentId: null,
+  dvCurrentTitle: '',
+  dvUndoStack: [],
+  dvRedoStack: [],
+  dvScale: 1,
+  dvPendingDeleteId: null,
+  dvSuppressHistory: false,
+
+  dvInit() {
+    dvQs('#dvNotepadNavBtn').addEventListener('click', () => this.dvOpenLanding());
+    dvQs('#dvNotepadLandingBackBtn').addEventListener('click', () => this.dvCloseLanding());
+    dvQs('#dvNotepadFab').addEventListener('click', () => this.dvOpenWorkspace(null));
+    dvQs('#dvNotepadWorkspaceBackBtn').addEventListener('click', () => this.dvCloseWorkspace());
+
+    const dvTa = dvQs('#dvNotepadTextarea');
+    dvTa.addEventListener('input', () => {
+      if (this.dvSuppressHistory) return;
+      this.dvPushUndo();
+    });
+
+    dvQsa('.dv-notepad-tool').forEach((dvBtn) => {
+      dvBtn.addEventListener('click', () => this.dvHandleTool(dvBtn.getAttribute('data-dv-tool')));
+    });
+
+    dvQs('#dvNoteNewCancelBtn').addEventListener('click', () => dvQs('#dvNoteNewConfirm').classList.remove('dv-confirm--open'));
+    dvQs('#dvNoteNewConfirmBtn').addEventListener('click', () => { dvQs('#dvNoteNewConfirm').classList.remove('dv-confirm--open'); this.dvStartNew(); });
+
+    dvQs('#dvNoteDeleteCancelBtn').addEventListener('click', () => dvQs('#dvNoteDeleteConfirm').classList.remove('dv-confirm--open'));
+    dvQs('#dvNoteSaveCancelBtn').addEventListener('click', () => dvQs('#dvNoteSaveConfirm').classList.remove('dv-confirm--open'));
+  },
+
+  dvIsLandingOpen() { return dvQs('#dvNotepadLandingModal').classList.contains('dv-modal--open'); },
+  dvIsWorkspaceOpen() { return dvQs('#dvNotepadWorkspaceModal').classList.contains('dv-modal--open'); },
+  dvAnyConfirmOpen() {
+    return dvQs('#dvNoteNewConfirm').classList.contains('dv-confirm--open') ||
+           dvQs('#dvNoteDeleteConfirm').classList.contains('dv-confirm--open') ||
+           dvQs('#dvNoteSaveConfirm').classList.contains('dv-confirm--open');
+  },
+  dvCloseAnyConfirm() {
+    dvQs('#dvNoteNewConfirm').classList.remove('dv-confirm--open');
+    dvQs('#dvNoteDeleteConfirm').classList.remove('dv-confirm--open');
+    dvQs('#dvNoteSaveConfirm').classList.remove('dv-confirm--open');
+  },
+
+  dvOpenLanding() {
+    dvQs('#dvNotepadLandingModal').classList.add('dv-modal--open');
+    dvQs('#dvNotepadNavBtn').classList.add('dv-bottomnav__item--active');
+    this.dvRenderList();
+  },
+  dvCloseLanding() {
+    dvQs('#dvNotepadLandingModal').classList.remove('dv-modal--open');
+    dvQs('#dvNotepadNavBtn').classList.remove('dv-bottomnav__item--active');
+  },
+
+  dvOpenWorkspace(dvNote) {
+    this.dvCurrentId = dvNote ? dvNote.id : null;
+    this.dvCurrentTitle = dvNote ? dvNote.title : '';
+    dvQs('#dvNotepadWorkspaceTitle').textContent = dvNote ? dvNote.title : 'Untitled Note';
+    dvQs('#dvNotepadTextarea').value = dvNote ? dvNote.content : '';
+    this.dvUndoStack = [dvQs('#dvNotepadTextarea').value];
+    this.dvRedoStack = [];
+    dvQs('#dvNotepadWorkspaceModal').classList.add('dv-modal--open');
+    dvQs('#dvNotepadTextarea').focus();
+  },
+  dvCloseWorkspace() { dvQs('#dvNotepadWorkspaceModal').classList.remove('dv-modal--open'); },
+
+  dvPushUndo() {
+    const dvVal = dvQs('#dvNotepadTextarea').value;
+    if (this.dvUndoStack[this.dvUndoStack.length - 1] !== dvVal) {
+      this.dvUndoStack.push(dvVal);
+      if (this.dvUndoStack.length > 100) this.dvUndoStack.shift();
+      this.dvRedoStack = [];
+    }
+  },
+
+  dvSetTextareaValue(dvVal) {
+    this.dvSuppressHistory = true;
+    dvQs('#dvNotepadTextarea').value = dvVal;
+    this.dvSuppressHistory = false;
+  },
+
+  dvHandleTool(dvTool) {
+    const dvTa = dvQs('#dvNotepadTextarea');
+    switch (dvTool) {
+      case 'new':
+        dvQs('#dvNoteNewConfirm').classList.add('dv-confirm--open');
+        break;
+
+      case 'undo':
+        if (this.dvUndoStack.length > 1) {
+          this.dvRedoStack.push(this.dvUndoStack.pop());
+          this.dvSetTextareaValue(this.dvUndoStack[this.dvUndoStack.length - 1]);
+        } else {
+          DvToast.dvShow('Nothing to undo');
+        }
+        break;
+
+      case 'redo':
+        if (this.dvRedoStack.length > 0) {
+          const dvVal = this.dvRedoStack.pop();
+          this.dvUndoStack.push(dvVal);
+          this.dvSetTextareaValue(dvVal);
+        } else {
+          DvToast.dvShow('Nothing to redo');
+        }
+        break;
+
+      case 'paste':
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText().then((dvText) => {
+            const dvStart = dvTa.selectionStart != null ? dvTa.selectionStart : dvTa.value.length;
+            const dvEnd = dvTa.selectionEnd != null ? dvTa.selectionEnd : dvTa.value.length;
+            dvTa.value = dvTa.value.slice(0, dvStart) + dvText + dvTa.value.slice(dvEnd);
+            this.dvPushUndo();
+            DvToast.dvShow('Pasted');
+          }).catch(() => DvToast.dvShow('Clipboard access was blocked', 'error'));
+        } else {
+          DvToast.dvShow('Clipboard paste is not available on this browser', 'error');
+        }
+        break;
+
+      case 'copy':
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(dvTa.value).then(() => DvToast.dvShow('Copied to clipboard')).catch(() => DvToast.dvShow('Copy was blocked', 'error'));
+        } else {
+          dvTa.select();
+          try { document.execCommand('copy'); DvToast.dvShow('Copied to clipboard'); } catch (dvErr) { DvToast.dvShow('Copy is not available', 'error'); }
+        }
+        break;
+
+      case 'delete':
+        dvQs('#dvNoteDeleteTitle').textContent = "Clear this note's content?";
+        dvQs('#dvNoteDeleteConfirmBtn').onclick = () => { dvQs('#dvNoteDeleteConfirm').classList.remove('dv-confirm--open'); this.dvConfirmDeleteAction(); };
+        dvQs('#dvNoteDeleteConfirm').classList.add('dv-confirm--open');
+        break;
+
+      case 'save':
+        dvQs('#dvNoteSaveTitleInput').value = this.dvCurrentTitle || '';
+        dvQs('#dvNoteSaveConfirmBtn').onclick = () => this.dvConfirmSave();
+        dvQs('#dvNoteSaveConfirm').classList.add('dv-confirm--open');
+        break;
+
+      case 'select':
+        dvTa.focus();
+        dvTa.setSelectionRange(0, dvTa.value.length);
+        break;
+
+      case 'zoomin':
+        this.dvScale = dvClamp(this.dvScale + 0.1, 0.7, 2.2);
+        document.documentElement.style.setProperty('--dv-notepad-scale', this.dvScale.toFixed(2));
+        break;
+
+      case 'zoomout':
+        this.dvScale = dvClamp(this.dvScale - 0.1, 0.7, 2.2);
+        document.documentElement.style.setProperty('--dv-notepad-scale', this.dvScale.toFixed(2));
+        break;
+
+      case 'darkmode':
+        dvQs('#dvDarkModeToggle').click();
+        break;
+    }
+  },
+
+  dvStartNew() {
+    this.dvCurrentId = null;
+    this.dvCurrentTitle = '';
+    dvQs('#dvNotepadWorkspaceTitle').textContent = 'Untitled Note';
+    this.dvSetTextareaValue('');
+    this.dvUndoStack = [''];
+    this.dvRedoStack = [];
+    DvToast.dvShow('New note started');
+  },
+
+  // Toolbar Delete: select-all, clear, and leave it undoable via Undo/Redo.
+  dvConfirmDeleteAction() {
+    const dvTa = dvQs('#dvNotepadTextarea');
+    dvTa.focus();
+    dvTa.setSelectionRange(0, dvTa.value.length);
+    this.dvSetTextareaValue('');
+    this.dvPushUndo();
+    DvToast.dvShow('Content cleared — Undo to restore');
+  },
+
+  async dvConfirmSave() {
+    const dvTitle = dvQs('#dvNoteSaveTitleInput').value.trim() || 'Untitled Note';
+    const dvId = this.dvCurrentId || dvUid();
+    const dvNote = { id: dvId, title: dvTitle, content: dvQs('#dvNotepadTextarea').value, updatedAt: Date.now() };
+    await DvDB.dvPutNote(dvNote);
+    this.dvCurrentId = dvId;
+    this.dvCurrentTitle = dvTitle;
+    dvQs('#dvNotepadWorkspaceTitle').textContent = dvTitle;
+    dvQs('#dvNoteSaveConfirm').classList.remove('dv-confirm--open');
+    DvToast.dvShow('Note saved', 'success');
+  },
+
+  async dvRenderList() {
+    const dvNotes = await DvDB.dvGetAllNotes();
+    const dvList = dvQs('#dvNoteList');
+    dvQs('#dvNotesEmpty').classList.toggle('dv-hidden', dvNotes.length > 0);
+    dvList.innerHTML = dvNotes.map((dvN) => `
+      <li class="dv-file-row" data-dv-note-id="${dvN.id}">
+        <div class="dv-file-row__thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="26" height="26"><path d="M6 3h9l5 5v13H6z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></div>
+        <div class="dv-file-row__meta">
+          <div class="dv-file-row__name">${dvEscapeHtml(dvN.title)}</div>
+          <div class="dv-file-row__sub">${new Date(dvN.updatedAt).toLocaleDateString()}</div>
+        </div>
+        <button class="dv-icon-btn" data-dv-note-menu="${dvN.id}" aria-label="Options">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+        </button>
+      </li>
+    `).join('');
+
+    dvQsa('[data-dv-note-menu]', dvList).forEach((dvBtn) => {
+      dvBtn.addEventListener('click', (dvEvt) => {
+        dvEvt.stopPropagation();
+        this.dvOpenNoteMenu(dvBtn.getAttribute('data-dv-note-menu'), dvBtn);
+      });
+    });
+    dvQsa('.dv-file-row', dvList).forEach((dvRow) => {
+      dvRow.addEventListener('click', async () => {
+        const dvNotes2 = await DvDB.dvGetAllNotes();
+        const dvNote = dvNotes2.find((n) => n.id === dvRow.getAttribute('data-dv-note-id'));
+        if (dvNote) this.dvOpenWorkspace(dvNote);
+      });
+    });
+  },
+
+  async dvRename(dvId) {
+    const dvNotes = await DvDB.dvGetAllNotes();
+    const dvNote = dvNotes.find((n) => n.id === dvId);
+    if (!dvNote) return;
+    dvQs('#dvNoteSaveTitleInput').value = dvNote.title;
+    dvQs('#dvNoteSaveConfirmBtn').onclick = async () => {
+      dvNote.title = dvQs('#dvNoteSaveTitleInput').value.trim() || dvNote.title;
+      dvNote.updatedAt = Date.now();
+      await DvDB.dvPutNote(dvNote);
+      dvQs('#dvNoteSaveConfirm').classList.remove('dv-confirm--open');
+      DvToast.dvShow('Renamed', 'success');
+      this.dvRenderList();
+    };
+    dvQs('#dvNoteSaveConfirm').classList.add('dv-confirm--open');
+  },
+
+  dvOpenDeleteConfirm(dvId) {
+    dvQs('#dvNoteDeleteTitle').textContent = 'Delete this note?';
+    dvQs('#dvNoteDeleteConfirmBtn').onclick = async () => {
+      await DvDB.dvDeleteNote(dvId);
+      DvToast.dvShow('Note deleted');
+      this.dvRenderList();
+      dvQs('#dvNoteDeleteConfirm').classList.remove('dv-confirm--open');
+    };
+    dvQs('#dvNoteDeleteConfirm').classList.add('dv-confirm--open');
+  },
+
+  dvOpenNoteMenu(dvId, dvAnchorEl) {
+    DvMenu.dvOpen(dvAnchorEl, [
+      { label: 'Rename', icon: 'rename', onClick: () => this.dvRename(dvId) },
+      { label: 'Edit', icon: 'open', onClick: async () => { const notes = await DvDB.dvGetAllNotes(); const n = notes.find((x) => x.id === dvId); if (n) this.dvOpenWorkspace(n); } },
+      { label: 'Delete', icon: 'delete', danger: true, onClick: () => this.dvOpenDeleteConfirm(dvId) },
+      { label: 'Share to WhatsApp', icon: 'whatsapp', onClick: async () => { const notes = await DvDB.dvGetAllNotes(); const n = notes.find((x) => x.id === dvId); if (n) this.dvShareNoteText(n, 'whatsapp'); } },
+      { label: 'Share to Facebook', icon: 'facebook', onClick: async () => { const notes = await DvDB.dvGetAllNotes(); const n = notes.find((x) => x.id === dvId); if (n) this.dvShareNoteText(n, 'facebook'); } },
+      { label: 'Share to Email', icon: 'share', onClick: async () => { const notes = await DvDB.dvGetAllNotes(); const n = notes.find((x) => x.id === dvId); if (n) this.dvShareNoteText(n, 'email'); } },
+      { label: 'Android Share Sheet', icon: 'share', onClick: async () => { const notes = await DvDB.dvGetAllNotes(); const n = notes.find((x) => x.id === dvId); if (n) this.dvShareNoteText(n, 'native'); } },
+      { label: 'Exit', icon: 'exit', onClick: () => {} }
+    ]);
+  },
+
+  async dvShareNoteText(dvNote, dvChannel) {
+    const dvText = dvNote.title + '\n\n' + dvNote.content;
+    if (dvChannel === 'whatsapp') {
+      window.open('https://wa.me/?text=' + encodeURIComponent(dvText), '_blank');
+    } else if (dvChannel === 'facebook') {
+      window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(location.href) + '&quote=' + encodeURIComponent(dvText), '_blank');
+    } else if (dvChannel === 'email') {
+      window.location.href = 'mailto:?subject=' + encodeURIComponent(dvNote.title) + '&body=' + encodeURIComponent(dvNote.content);
+    } else if (navigator.share) {
+      try { await navigator.share({ title: dvNote.title, text: dvText }); } catch (dvErr) { /* user cancelled */ }
+    } else {
+      DvToast.dvShow('Sharing not supported on this browser');
+    }
+  }
+};
+
 const DvGifEncoder = {
   dvQuantize(dvImageData, dvMaxColors) {
     // Simple uniform quantization to a fixed cube palette (fast, dependency-free).
@@ -1574,17 +1903,6 @@ const DvExport = {
     const dvDataUrl = dvCanvas.toDataURL('image/png');
     DvShare.dvShareDataUrl(dvDataUrl, 'dv-suite-design.png', dvChannel);
   },
-
-  /* ------------------------------------------------------------------
-     Video export: canvas.captureStream() + MediaRecorder are native
-     browser APIs, not external libraries. We try real MP4 first; if
-     the device can't record MP4 natively we fall back to WebM (also
-     a real, playable video format) with no dependency at all. Only if
-     native MP4 isn't available do we lazy-load a minimal, well-known
-     CDN-hosted transcoder to produce a true MP4 as well — never on
-     the default path, and never blocking the WebM the user already got.
-     ------------------------------------------------------------------ */
-
   dvPickVideoMime() {
     const dvCandidates = [
       { mime: 'video/mp4;codecs=avc1', ext: 'mp4' },
@@ -1835,7 +2153,9 @@ document.addEventListener('DOMContentLoaded', () => {
   DvFiles.dvInit();
   DvEditor.dvInit();
   DvEmoji.dvInit();
+  DvNotes.dvInit();
   dvWireMorePage();
   dvRegisterServiceWorker();
   DvFiles.dvRenderRecent();
 });
+        
