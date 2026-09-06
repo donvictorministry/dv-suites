@@ -21,7 +21,6 @@
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-
 <div class="dv-app" id="dvApp">
 
   <!-- ===================== TOP BAR ===================== -->
@@ -133,6 +132,10 @@
               <input class="dv-field__input" type="text" id="dvFooterInput" placeholder="Enter footer text">
             </div>
             <div class="dv-field">
+              <label class="dv-field__label">Author / Credit (optional)</label>
+              <input class="dv-field__input" type="text" id="dvAuthorInput" placeholder="e.g. your name or handle">
+            </div>
+            <div class="dv-field">
               <label class="dv-field__label">Image</label>
               <input class="dv-field__input" type="file" id="dvImageInput" accept="image/*">
             </div>
@@ -148,6 +151,27 @@
                 <label class="dv-field__label">Secondary colour</label>
                 <input class="dv-field__color" type="color" id="dvSecondaryColorInput" value="#FFFFFF">
               </div>
+            </div>
+            <div class="dv-field__row">
+              <div class="dv-field">
+                <label class="dv-field__label">Headline text colour</label>
+                <input class="dv-field__color" type="color" id="dvHeadlineColorInput" value="#1877F2">
+              </div>
+              <div class="dv-field">
+                <label class="dv-field__label">Body text colour</label>
+                <input class="dv-field__color" type="color" id="dvBodyColorInput" value="#333333">
+              </div>
+            </div>
+            <div class="dv-field">
+              <label class="dv-field__label">Watermark</label>
+              <div class="dv-segmented" id="dvWatermarkSegmented">
+                <button class="dv-segmented__opt dv-segmented__opt--active" data-dv-watermark="on">On</button>
+                <button class="dv-segmented__opt" data-dv-watermark="off">Off</button>
+              </div>
+            </div>
+            <div class="dv-field">
+              <label class="dv-field__label">Watermark text</label>
+              <input class="dv-field__input" type="text" id="dvWatermarkTextInput" placeholder="DV-SUITE" value="DV-SUITE">
             </div>
             <div class="dv-field">
               <label class="dv-field__label">Font</label>
