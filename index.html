@@ -23,6 +23,7 @@
 
 <div class="dv-app" id="dvApp">
 
+  <!-- ===================== TOP BAR ===================== -->
   <header class="dv-topbar" id="dvTopbar">
     <button class="dv-icon-btn" id="dvBackBtn" aria-label="Back">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
@@ -255,11 +256,12 @@
           <div class="dv-editor__panel" data-dv-panel="quality">
             <ul class="dv-qc-list" id="dvQualityList"></ul>
           </div>
-        </div>
 
-        <div class="dv-editor__footer">
-          <button class="dv-btn dv-btn--outline" id="dvSaveBtn">Save</button>
-          <button class="dv-btn dv-btn--primary" id="dvExportBtn">Export / Share</button>
+          <div class="dv-editor__actions">
+            <button class="dv-btn dv-btn--outline dv-btn--block" id="dvSaveBtn">Save</button>
+            <button class="dv-btn dv-btn--primary dv-btn--block" id="dvExportBtn">Export / Share</button>
+          </div>
+
         </div>
       </div>
     </section>
@@ -302,6 +304,7 @@
         </button>
       </div>
     </section>
+
   </main>
 
   <!-- ===================== BOTTOM NAV ===================== -->
@@ -318,11 +321,16 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h6l2 2h8v10H4z"/></svg>
       <span class="dv-bottomnav__label">Files</span>
     </button>
+    <button class="dv-bottomnav__item" id="dvNotepadNavBtn" data-dv-nav="notepad">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13H6z"/><path d="M14 3v5h5M9 13h6M9 17h6M9 9h2"/></svg>
+      <span class="dv-bottomnav__label">Notepad</span>
+    </button>
     <button class="dv-bottomnav__item" data-dv-nav="more">
       <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
       <span class="dv-bottomnav__label">More</span>
     </button>
   </nav>
+
 </div>
 
 <!-- ===================== INFO SIDEBAR (hamburger) ===================== -->
@@ -415,6 +423,103 @@
   </div>
 </div>
 
+<!-- ===================== NOTEPAD: LANDING MODAL (saved notes storage) ===================== -->
+<div class="dv-modal" id="dvNotepadLandingModal">
+  <div class="dv-modal__header">
+    <button class="dv-icon-btn" id="dvNotepadLandingBackBtn" aria-label="Back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="dv-modal__title">Notepad</div>
+  </div>
+  <div class="dv-modal__body">
+    <ul class="dv-file-list" id="dvNoteList"></ul>
+    <div class="dv-empty dv-hidden" id="dvNotesEmpty">No saved notes yet. Tap + to write one.</div>
+  </div>
+  <button class="dv-fab" id="dvNotepadFab" aria-label="New note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+</div>
+
+<!-- ===================== NOTEPAD: WORKSPACE MODAL ===================== -->
+<div class="dv-modal" id="dvNotepadWorkspaceModal">
+  <div class="dv-modal__header">
+    <button class="dv-icon-btn" id="dvNotepadWorkspaceBackBtn" aria-label="Back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="dv-modal__title" id="dvNotepadWorkspaceTitle">Untitled Note</div>
+  </div>
+  <div class="dv-notepad-toolbar" id="dvNotepadToolbar">
+    <button class="dv-notepad-tool" data-dv-tool="new" aria-label="New">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg><span>New</span>
+    </button>
+    <button class="dv-notepad-tool" data-dv-tool="undo" aria-label="Undo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-1"/></svg><span>Undo</span>
+    </button>
+    <button class="dv-notepad-tool" data-dv-tool="redo" aria-label="Redo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 000 10h1"/></svg><span>Redo</span>
+    </button>
+    <button class="dv-notepad-tool" data-dv-tool="paste" aria-label="Paste">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 2h6v4H9z"/></svg><span>Paste</span>
+    </button>
+    <button class="dv-notepad-tool" data-dv-tool="copy" aria-label="Copy">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg><span>Copy</span>
+    </button>
+    <button class="dv-notepad-tool" data-dv-tool="delete" aria-label="Delete">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg><span>Delete</span>
+    </button>
+    <button class="dv-notepad-tool" data-dv-tool="save" aria-label="Save">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg><span>Save</span>
+    </button>
+    <button class="dv-notepad-tool" data-dv-tool="select" aria-label="Select all">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 3"/></svg><span>Select</span>
+    </button>
+    <button class="dv-notepad-tool" data-dv-tool="zoomin" aria-label="Zoom in">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg><span>A+</span>
+    </button>
+    <button class="dv-notepad-tool" data-dv-tool="zoomout" aria-label="Zoom out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/></svg><span>A-</span>
+    </button>
+    <button class="dv-notepad-tool" data-dv-tool="darkmode" aria-label="Toggle dark mode">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg><span>Dark</span>
+    </button>
+  </div>
+  <div class="dv-notepad-body">
+    <textarea class="dv-notepad-textarea" id="dvNotepadTextarea" placeholder="Start typing your note…"></textarea>
+  </div>
+</div>
+
+<!-- ===================== NOTEPAD: CONFIRM MODALS ===================== -->
+<div class="dv-confirm" id="dvNoteNewConfirm">
+  <div class="dv-confirm__card">
+    <div class="dv-confirm__title">Start a new note? Unsaved changes will be lost.</div>
+    <div class="dv-confirm__actions">
+      <button class="dv-btn dv-btn--text" id="dvNoteNewCancelBtn">Cancel</button>
+      <button class="dv-btn dv-btn--primary" id="dvNoteNewConfirmBtn">New Note</button>
+    </div>
+  </div>
+</div>
+
+<div class="dv-confirm" id="dvNoteDeleteConfirm">
+  <div class="dv-confirm__card">
+    <div class="dv-confirm__title" id="dvNoteDeleteTitle">Clear this note's content?</div>
+    <div class="dv-confirm__actions">
+      <button class="dv-btn dv-btn--danger" id="dvNoteDeleteConfirmBtn">Delete</button>
+      <button class="dv-btn dv-btn--text" id="dvNoteDeleteCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="dv-confirm" id="dvNoteSaveConfirm">
+  <div class="dv-confirm__card">
+    <div class="dv-confirm__title">Save note</div>
+    <input class="dv-confirm__input" type="text" id="dvNoteSaveTitleInput" placeholder="Title">
+    <div class="dv-confirm__actions">
+      <button class="dv-btn dv-btn--text" id="dvNoteSaveCancelBtn">Cancel</button>
+      <button class="dv-btn dv-btn--primary" id="dvNoteSaveConfirmBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== CONTEXT MENU (three vertical dots) ===================== -->
 <div class="dv-menu" id="dvContextMenu"></div>
 
@@ -425,4 +530,3 @@
 <script src="./scripts.js"></script>
 </body>
 </html>
-  
